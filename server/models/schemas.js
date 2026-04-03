@@ -57,12 +57,13 @@ const PrintJobSchema = new mongoose.Schema({
   },
   files: [
     {
-      originalName: String,
-      storedName: String,
-      filePath: String,
-      mimeType: String,
-      fileSize: Number,
-      pageCount: { type: Number, default: 1 }
+        originalName: String,
+        storedName: String,
+        url: String,
+        publicId: String,
+        mimeType: String,
+        fileSize: Number,
+        pageCount: { type: Number, default: 1 }
     }
   ],
   settings: {

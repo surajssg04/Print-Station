@@ -3,9 +3,23 @@ const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const QRCode = require('qrcode');
 const path = require('path');
-const fs = require('fs-extra');
+const streamifier = require('streamifier');
+
 const { PrinterSession, PrintJob } = require('../models/schemas');
-const { upload, UPLOAD_DIR } = require('../config/multer');
+const { upload } = require('../config/multer');
+const cloudinary = require('../config/cloudinary');
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+function uploadBufferToCloudinary(fileBuffer, options = {}) {
+  return new Promise((resolve, reject) => {
+    const uploadStream = cloudinary.uploader.upload_stream(options, (error, result) => {
+      if (error) return reject(error);
+      resolve(result);
+    });
+
+    streamifier.createReadStream(fileBuffer).pipe(uploadStream);
+  });
+}
 
 // ─── SESSION ROUTES ──────────────────────────────────────────────────────────
 
@@ -77,13 +91,8 @@ router.post('/jobs/:sessionId', upload.array('files', 10), async (req, res) => {
   try {
     const { sessionId } = req.params;
 
-    // Verify session exists and is active
     const session = await PrinterSession.findOne({ sessionId, status: 'active' });
     if (!session) {
-      // Clean up uploaded files if session invalid
-      if (req.files) {
-        for (const f of req.files) await fs.remove(f.path);
-      }
       return res.status(404).json({ success: false, error: 'Printer session not found or inactive' });
     }
 
@@ -92,24 +101,42 @@ router.post('/jobs/:sessionId', upload.array('files', 10), async (req, res) => {
     }
 
     const { orientation, copies, colorMode, paperSize, studentName } = req.body;
-
     const jobId = uuidv4();
-    const files = req.files.map(f => ({
-      originalName: f.originalname,
-      storedName: f.filename,
-      filePath: f.path,
-      mimeType: f.mimetype,
-      fileSize: f.size
-    }));
+
+    const uploadedFiles = [];
+
+    for (const file of req.files) {
+      const ext = path.extname(file.originalname).toLowerCase();
+      const storedName = `${uuidv4()}${ext}`;
+
+      const resourceType = file.mimetype === 'application/pdf' ? 'raw' : 'image';
+
+      const result = await uploadBufferToCloudinary(file.buffer, {
+        folder: `print-station/${sessionId}`,
+        public_id: storedName.replace(ext, ''),
+        resource_type: resourceType,
+        use_filename: false,
+        unique_filename: false
+      });
+
+      uploadedFiles.push({
+        originalName: file.originalname,
+        storedName,
+        url: result.secure_url,
+        publicId: result.public_id,
+        mimeType: file.mimetype,
+        fileSize: file.size
+      });
+    }
 
     const job = new PrintJob({
       jobId,
       sessionId,
       studentName: studentName || 'Anonymous',
-      files,
+      files: uploadedFiles,
       settings: {
         orientation: orientation || 'portrait',
-        copies: Math.min(parseInt(copies) || 1, 20),
+        copies: Math.min(parseInt(copies, 10) || 1, 20),
         colorMode: colorMode || 'grayscale',
         paperSize: paperSize || 'A4'
       }
@@ -117,18 +144,18 @@ router.post('/jobs/:sessionId', upload.array('files', 10), async (req, res) => {
 
     await job.save();
 
-    // Emit to the correct printer dashboard via Socket.IO
     const io = req.app.get('io');
     io.to(`session:${sessionId}`).emit('new_job', {
       jobId,
       studentName: job.studentName,
-      fileCount: files.length,
-      files: files.map(f => ({
+      fileCount: uploadedFiles.length,
+      files: uploadedFiles.map(f => ({
         originalName: f.originalName,
         storedName: f.storedName,
+        url: f.url,
         mimeType: f.mimeType,
         fileSize: f.fileSize
-        })),
+      })),
       settings: job.settings,
       submittedAt: job.submittedAt
     });
@@ -165,7 +192,7 @@ router.get('/jobs/detail/:jobId', async (req, res) => {
   }
 });
 
-// GET /api/files/:sessionId/:filename — Serve a file for preview/print
+// GET /api/files/:sessionId/:filename — Redirect to Cloudinary file URL
 router.get('/files/:sessionId/:filename', async (req, res) => {
   try {
     const { sessionId, filename } = req.params;
@@ -185,24 +212,18 @@ router.get('/files/:sessionId/:filename', async (req, res) => {
 
     const file = job.files.find(f => f.storedName === filename);
 
-    if (!file || !file.filePath) {
-      return res.status(404).json({ error: 'Stored file path missing' });
+    if (!file || !file.url) {
+      return res.status(404).json({ error: 'Stored file URL missing' });
     }
 
-    const exists = await fs.pathExists(file.filePath);
-    if (!exists) {
-      return res.status(404).json({ error: 'File not found on server' });
-    }
-
-    res.type(file.mimeType || 'application/octet-stream');
-    return res.sendFile(path.resolve(file.filePath));
+    return res.redirect(file.url);
   } catch (err) {
     console.error('Serve file error:', err);
     return res.status(500).json({ error: err.message });
   }
 });
 
-// PATCH /api/jobs/:jobId/status — Update job status (printing, printed, failed)
+// PATCH /api/jobs/:jobId/status — Update job status
 router.patch('/jobs/:jobId/status', async (req, res) => {
   try {
     const { status } = req.body;
@@ -216,7 +237,6 @@ router.patch('/jobs/:jobId/status', async (req, res) => {
       await job.save();
     }
 
-    // Notify dashboard of status update
     const io = req.app.get('io');
     io.to(`session:${job.sessionId}`).emit('job_status_update', {
       jobId: job.jobId,
@@ -235,9 +255,13 @@ router.delete('/jobs/:jobId', async (req, res) => {
     const job = await PrintJob.findOne({ jobId: req.params.jobId });
     if (!job) return res.status(404).json({ success: false, error: 'Job not found' });
 
-    // Remove files
-    for (const f of job.files) {
-      await fs.remove(f.filePath).catch(() => {});
+    for (const file of job.files) {
+      if (file.publicId) {
+        const resourceType = file.mimeType === 'application/pdf' ? 'raw' : 'image';
+        await cloudinary.uploader.destroy(file.publicId, {
+          resource_type: resourceType
+        }).catch(() => {});
+      }
     }
 
     await PrintJob.deleteOne({ jobId: req.params.jobId });
