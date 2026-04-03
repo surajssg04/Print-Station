@@ -246,10 +246,23 @@ router.patch('/jobs/:jobId/status', async (req, res) => {
     }
 
     if (status === 'printed') {
-      await job.markPrinted();
+      await PrintJob.updateOne(
+        { jobId: req.params.jobId },
+        {
+          $set: {
+            status: 'printed',
+            printedAt: new Date(),
+            deleteAfter: new Date(Date.now() + 60 * 60 * 1000)
+          }
+        }
+      );
+      job.status = 'printed';
     } else {
+      await PrintJob.updateOne(
+        { jobId: req.params.jobId },
+        { $set: { status } }
+      );
       job.status = status;
-      await job.save();
     }
 
     const io = req.app.get('io');
@@ -260,6 +273,7 @@ router.patch('/jobs/:jobId/status', async (req, res) => {
 
     res.json({ success: true, status: job.status });
   } catch (err) {
+    console.error('Status update error:', err);
     res.status(500).json({ success: false, error: err.message });
   }
 });
