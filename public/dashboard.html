@@ -558,6 +558,7 @@
     updateStats();
     toast(`📥 New job from ${job.studentName} (${job.fileCount} file${job.fileCount > 1 ? 's' : ''})`);
     socket.emit('ack_job', { jobId: job.jobId, sessionId });
+    console.log('NEW JOB PAYLOAD:', job);
   });
 
   socket.on('job_status_update', ({ jobId, status }) => {
@@ -657,23 +658,22 @@
 
   async function loadExistingJobs() {
     if (!sessionId) return;
-
     try {
-      const res = await fetch(`/api/jobs/${sessionId}`);
-      const data = await res.json();
-      if (!data.success) return;
+        const res = await fetch(`/api/jobs/${sessionId}`);
+        const data = await res.json();
 
-      jobs = {};
-      document.getElementById('jobList').innerHTML = '';
+        console.log('LOADED JOBS:', data.jobs);
 
-      for (const job of data.jobs) {
+        if (!data.success) return;
+        jobs = {};
+        document.getElementById('jobList').innerHTML = '';
+        for (const job of data.jobs) {
         jobs[job.jobId] = job;
         renderJobCard(job.jobId, job);
-      }
-
-      updateStats();
+        }
+        updateStats();
     } catch (_) {}
-  }
+    }
 
   function renderJobCard(jobId, job) {
     const existing = document.getElementById(`job-${jobId}`);
