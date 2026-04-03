@@ -757,38 +757,54 @@
   }
 
   async function printJob(jobId) {
-    const job = jobs[jobId];
-    if (!job) return;
+  const job = jobs[jobId];
+  if (!job) return;
 
-    const copiesEl = document.getElementById(`copies-${jobId}`);
-    const copies = parseInt(copiesEl?.value, 10) || job.settings?.copies || 1;
+  const copiesEl = document.getElementById(`copies-${jobId}`);
+  const copies = parseInt(copiesEl?.value, 10) || job.settings?.copies || 1;
 
-    const printBtn = document.getElementById(`print-btn-${jobId}`);
-    printBtn.disabled = true;
-    printBtn.textContent = 'Printing…';
+  const printBtn = document.getElementById(`print-btn-${jobId}`);
+  printBtn.disabled = true;
+  printBtn.textContent = 'Printing…';
 
+  try {
     await updateJobStatus(jobId, 'printing');
 
-    try {
-      for (const f of job.files) {
-        await openPrintWindow(f.url, f.storedName, f.originalName, copies, job.settings, f.mimeType);
-        if (job.files.length > 1) await delay(600);
+    for (const f of job.files || []) {
+      if (!f.url) {
+        throw new Error('Missing file URL');
       }
 
-      await updateJobStatus(jobId, 'printed');
-      jobs[jobId].status = 'printed';
-      updateJobCardStatus(jobId, 'printed');
-      updateStats();
-    } catch (err) {
-      toast('Print failed');
-      printBtn.disabled = false;
-      printBtn.textContent = '🖨 Print';
-      await updateJobStatus(jobId, 'failed');
-      jobs[jobId].status = 'failed';
-      updateJobCardStatus(jobId, 'failed');
-      updateStats();
+      for (let i = 0; i < copies; i++) {
+        const w = window.open(f.url, '_blank');
+        if (!w) {
+          throw new Error('Popup blocked');
+        }
+        await delay(1200);
+        try {
+          w.focus();
+          w.print();
+        } catch (_) {}
+        await delay(1000);
+      }
     }
+
+    await updateJobStatus(jobId, 'printed');
+    jobs[jobId].status = 'printed';
+    updateJobCardStatus(jobId, 'printed');
+    updateStats();
+  } catch (err) {
+    console.error('PRINT ERROR:', err);
+    toast(`Print failed: ${err.message}`);
+    printBtn.disabled = false;
+    printBtn.textContent = '🖨 Print';
+
+    await updateJobStatus(jobId, 'failed');
+    jobs[jobId].status = 'failed';
+    updateJobCardStatus(jobId, 'failed');
+    updateStats();
   }
+}
 
   function openPrintWindow(fileUrl, storedName, originalName, copies, settings, mimeType) {
     return new Promise((resolve, reject) => {

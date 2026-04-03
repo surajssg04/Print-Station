@@ -23,7 +23,7 @@ function uploadBufferToCloudinary(fileBuffer, options = {}) {
 
 // ─── SESSION ROUTES ──────────────────────────────────────────────────────────
 
-// POST /api/sessions — Create a new printer session
+// POST /api/sessions
 router.post('/sessions', async (req, res) => {
   try {
     const sessionId = uuidv4();
@@ -59,11 +59,13 @@ router.post('/sessions', async (req, res) => {
   }
 });
 
-// GET /api/sessions/:sessionId — Get session info
+// GET /api/sessions/:sessionId
 router.get('/sessions/:sessionId', async (req, res) => {
   try {
     const session = await PrinterSession.findOne({ sessionId: req.params.sessionId });
-    if (!session) return res.status(404).json({ success: false, error: 'Session not found' });
+    if (!session) {
+      return res.status(404).json({ success: false, error: 'Session not found' });
+    }
 
     res.json({ success: true, session });
   } catch (err) {
@@ -71,13 +73,14 @@ router.get('/sessions/:sessionId', async (req, res) => {
   }
 });
 
-// DELETE /api/sessions/:sessionId — Close a session
+// DELETE /api/sessions/:sessionId
 router.delete('/sessions/:sessionId', async (req, res) => {
   try {
     await PrinterSession.updateOne(
       { sessionId: req.params.sessionId },
       { status: 'inactive' }
     );
+
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -86,7 +89,7 @@ router.delete('/sessions/:sessionId', async (req, res) => {
 
 // ─── PRINT JOB ROUTES ────────────────────────────────────────────────────────
 
-// POST /api/jobs/:sessionId — Submit a new print job with file uploads
+// POST /api/jobs/:sessionId
 router.post('/jobs/:sessionId', upload.array('files', 10), async (req, res) => {
   try {
     const { sessionId } = req.params;
@@ -108,12 +111,12 @@ router.post('/jobs/:sessionId', upload.array('files', 10), async (req, res) => {
     for (const file of req.files) {
       const ext = path.extname(file.originalname).toLowerCase();
       const storedName = `${uuidv4()}${ext}`;
-
+      const publicIdBase = storedName.replace(ext, '');
       const resourceType = file.mimetype === 'application/pdf' ? 'raw' : 'image';
 
       const result = await uploadBufferToCloudinary(file.buffer, {
         folder: `print-station/${sessionId}`,
-        public_id: storedName.replace(ext, ''),
+        public_id: publicIdBase,
         resource_type: resourceType,
         use_filename: false,
         unique_filename: false
@@ -128,6 +131,8 @@ router.post('/jobs/:sessionId', upload.array('files', 10), async (req, res) => {
         fileSize: file.size
       });
     }
+
+    console.log('FILES TO SAVE:', uploadedFiles);
 
     const job = new PrintJob({
       jobId,
@@ -144,8 +149,7 @@ router.post('/jobs/:sessionId', upload.array('files', 10), async (req, res) => {
 
     await job.save();
 
-    const io = req.app.get('io');
-    io.to(`session:${sessionId}`).emit('new_job', {
+    const socketPayload = {
       jobId,
       studentName: job.studentName,
       fileCount: uploadedFiles.length,
@@ -158,7 +162,12 @@ router.post('/jobs/:sessionId', upload.array('files', 10), async (req, res) => {
       })),
       settings: job.settings,
       submittedAt: job.submittedAt
-    });
+    };
+
+    console.log('SOCKET new_job PAYLOAD:', socketPayload);
+
+    const io = req.app.get('io');
+    io.to(`session:${sessionId}`).emit('new_job', socketPayload);
 
     res.json({ success: true, jobId });
   } catch (err) {
@@ -167,7 +176,7 @@ router.post('/jobs/:sessionId', upload.array('files', 10), async (req, res) => {
   }
 });
 
-// GET /api/jobs/:sessionId — List all pending jobs for a session
+// GET /api/jobs/:sessionId
 router.get('/jobs/:sessionId', async (req, res) => {
   try {
     const jobs = await PrintJob.find({
@@ -181,18 +190,21 @@ router.get('/jobs/:sessionId', async (req, res) => {
   }
 });
 
-// GET /api/jobs/detail/:jobId — Get a single job's details
+// GET /api/jobs/detail/:jobId
 router.get('/jobs/detail/:jobId', async (req, res) => {
   try {
     const job = await PrintJob.findOne({ jobId: req.params.jobId });
-    if (!job) return res.status(404).json({ success: false, error: 'Job not found' });
+    if (!job) {
+      return res.status(404).json({ success: false, error: 'Job not found' });
+    }
+
     res.json({ success: true, job });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// GET /api/files/:sessionId/:filename — Redirect to Cloudinary file URL
+// GET /api/files/:sessionId/:filename
 router.get('/files/:sessionId/:filename', async (req, res) => {
   try {
     const { sessionId, filename } = req.params;
@@ -223,12 +235,15 @@ router.get('/files/:sessionId/:filename', async (req, res) => {
   }
 });
 
-// PATCH /api/jobs/:jobId/status — Update job status
+// PATCH /api/jobs/:jobId/status
 router.patch('/jobs/:jobId/status', async (req, res) => {
   try {
     const { status } = req.body;
     const job = await PrintJob.findOne({ jobId: req.params.jobId });
-    if (!job) return res.status(404).json({ success: false, error: 'Job not found' });
+
+    if (!job) {
+      return res.status(404).json({ success: false, error: 'Job not found' });
+    }
 
     if (status === 'printed') {
       await job.markPrinted();
@@ -249,11 +264,14 @@ router.patch('/jobs/:jobId/status', async (req, res) => {
   }
 });
 
-// DELETE /api/jobs/:jobId — Manually delete a job
+// DELETE /api/jobs/:jobId
 router.delete('/jobs/:jobId', async (req, res) => {
   try {
     const job = await PrintJob.findOne({ jobId: req.params.jobId });
-    if (!job) return res.status(404).json({ success: false, error: 'Job not found' });
+
+    if (!job) {
+      return res.status(404).json({ success: false, error: 'Job not found' });
+    }
 
     for (const file of job.files) {
       if (file.publicId) {

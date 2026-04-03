@@ -17,12 +17,8 @@ const PrinterSessionSchema = new mongoose.Schema({
     enum: ['active', 'inactive'],
     default: 'active'
   },
-  qrCodeDataUrl: {
-    type: String
-  },
-  sessionUrl: {
-    type: String
-  },
+  qrCodeDataUrl: String,
+  sessionUrl: String,
   connectedSocketId: {
     type: String,
     default: null
@@ -57,13 +53,13 @@ const PrintJobSchema = new mongoose.Schema({
   },
   files: [
     {
-        originalName: String,
-        storedName: String,
-        url: String,
-        publicId: String,
-        mimeType: String,
-        fileSize: Number,
-        pageCount: { type: Number, default: 1 }
+      originalName: { type: String, required: true },
+      storedName: { type: String, required: true },
+      url: { type: String, required: true },
+      publicId: { type: String, required: true },
+      mimeType: { type: String, required: true },
+      fileSize: { type: Number, required: true },
+      pageCount: { type: Number, default: 1 }
     }
   ],
   settings: {
@@ -102,18 +98,16 @@ const PrintJobSchema = new mongoose.Schema({
     type: Date,
     default: null
   },
-  // Auto-delete timestamps
   deleteAfter: {
     type: Date,
-    default: () => new Date(Date.now() + 24 * 60 * 60 * 1000) // 24h default
+    default: () => new Date(Date.now() + 24 * 60 * 60 * 1000)
   }
 });
 
-// Update deleteAfter to 1 hour after printing
 PrintJobSchema.methods.markPrinted = function () {
   this.status = 'printed';
   this.printedAt = new Date();
-  this.deleteAfter = new Date(Date.now() + 60 * 60 * 1000); // 1 hour after print
+  this.deleteAfter = new Date(Date.now() + 60 * 60 * 1000);
   return this.save();
 };
 
