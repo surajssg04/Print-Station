@@ -1,0 +1,986 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PrintStation — Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #0a0a0a;
+    --paper: #f5f0e8;
+    --white: #ffffff;
+    --accent: #e63946;
+    --green: #2d6a4f;
+    --green-light: #d8f3dc;
+    --amber: #d4a017;
+    --amber-light: #fef9c3;
+    --red: #e63946;
+    --red-light: #fde8e8;
+    --mid: #6b7280;
+    --border: #d1c9b8;
+    --border-dark: #0a0a0a;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--paper);
+    background-image: repeating-linear-gradient(
+      0deg, transparent, transparent 39px,
+      rgba(0,0,0,0.04) 39px, rgba(0,0,0,0.04) 40px
+    );
+    color: var(--ink);
+    min-height: 100vh;
+  }
+
+  /* ── Header ── */
+  header {
+    background: var(--ink);
+    color: var(--white);
+    padding: 0 2rem;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .logo {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.9rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    color: var(--paper);
+  }
+  .logo span { color: var(--accent); }
+  .header-meta {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.72rem;
+    color: rgba(255,255,255,0.5);
+    display: flex;
+    gap: 1.5rem;
+    align-items: center;
+  }
+  .status-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #6b7280;
+    display: inline-block;
+    margin-right: 6px;
+  }
+  .status-dot.live { background: #4ade80; animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+  /* ── Layout ── */
+  .layout {
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    gap: 0;
+    min-height: calc(100vh - 56px);
+  }
+
+  /* ── Left Panel: QR + Session ── */
+  .left-panel {
+    border-right: 2px solid var(--border-dark);
+    padding: 2rem;
+    background: var(--white);
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .panel-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--mid);
+    margin-bottom: 0.5rem;
+  }
+
+  .qr-wrapper {
+    border: 2px solid var(--border-dark);
+    padding: 1.25rem;
+    text-align: center;
+    background: var(--paper);
+    box-shadow: 4px 4px 0 var(--border-dark);
+  }
+  #qrImg {
+    width: 200px; height: 200px;
+    image-rendering: pixelated;
+  }
+  .qr-placeholder {
+    width: 200px; height: 200px;
+    background: var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--mid);
+    text-align: center;
+    padding: 1rem;
+  }
+
+  .session-url {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.65rem;
+    word-break: break-all;
+    color: var(--mid);
+    border: 1px solid var(--border);
+    padding: 0.5rem;
+    background: var(--paper);
+    margin-top: 0.75rem;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .session-url:hover { background: var(--amber-light); }
+
+  .btn {
+    display: block;
+    width: 100%;
+    padding: 0.75rem 1rem;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.75rem;
+    font-weight: 700;
+    border: 2px solid var(--border-dark);
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.15s;
+    letter-spacing: 0.05em;
+    background: var(--ink);
+    color: var(--white);
+  }
+  .btn:hover { background: var(--accent); border-color: var(--accent); }
+  .btn.secondary { background: var(--white); color: var(--ink); }
+  .btn.secondary:hover { background: var(--paper); }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .label-input {
+    border: 2px solid var(--border);
+    padding: 0.6rem 0.75rem;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.9rem;
+    width: 100%;
+    background: var(--paper);
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .label-input:focus { border-color: var(--border-dark); }
+
+  .stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+  }
+  .stat-box {
+    border: 1px solid var(--border);
+    padding: 0.75rem;
+    background: var(--paper);
+  }
+  .stat-val {
+    font-family: 'Space Mono', monospace;
+    font-size: 1.6rem;
+    font-weight: 700;
+    line-height: 1;
+  }
+  .stat-key {
+    font-size: 0.7rem;
+    color: var(--mid);
+    margin-top: 2px;
+  }
+
+  /* ── Right Panel: Job Queue ── */
+  .right-panel {
+    padding: 2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .queue-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.5rem;
+  }
+  .queue-title {
+    font-family: 'Space Mono', monospace;
+    font-size: 1.1rem;
+    font-weight: 700;
+  }
+  .queue-count {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.75rem;
+    background: var(--accent);
+    color: white;
+    padding: 0.2rem 0.6rem;
+    min-width: 28px;
+    text-align: center;
+  }
+
+  .empty-state {
+    border: 2px dashed var(--border);
+    padding: 4rem 2rem;
+    text-align: center;
+    color: var(--mid);
+  }
+  .empty-icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    opacity: 0.4;
+  }
+  .empty-text {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.8rem;
+  }
+
+  /* ── Job Card ── */
+  .job-card {
+    background: var(--white);
+    border: 2px solid var(--border-dark);
+    padding: 1.25rem;
+    box-shadow: 3px 3px 0 var(--border-dark);
+    position: relative;
+    animation: slideIn 0.3s ease;
+  }
+  @keyframes slideIn {
+    from { transform: translateY(-12px); opacity: 0; }
+    to   { transform: translateY(0);    opacity: 1; }
+  }
+  .job-card.status-printed {
+    border-color: var(--green);
+    box-shadow: 3px 3px 0 var(--green);
+    opacity: 0.6;
+  }
+  .job-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+    gap: 1rem;
+  }
+  .job-student {
+    font-weight: 600;
+    font-size: 1rem;
+  }
+  .job-time {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--mid);
+    white-space: nowrap;
+    padding-top: 3px;
+  }
+
+  .badge {
+    display: inline-block;
+    padding: 0.18rem 0.55rem;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.62rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border: 1px solid;
+  }
+  .badge-pending  { background: var(--amber-light); color: #92400e; border-color: #92400e; }
+  .badge-printing { background: #dbeafe; color: #1e40af; border-color: #1e40af; }
+  .badge-printed  { background: var(--green-light); color: var(--green); border-color: var(--green); }
+  .badge-failed   { background: var(--red-light); color: var(--red); border-color: var(--red); }
+
+  .job-files {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+  }
+  .file-chip {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    border: 1px solid var(--border);
+    padding: 0.3rem 0.6rem;
+    font-size: 0.75rem;
+    background: var(--paper);
+    cursor: pointer;
+    transition: background 0.15s;
+    max-width: 200px;
+  }
+  .file-chip:hover { background: var(--amber-light); }
+  .file-chip .ext {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.6rem;
+    font-weight: 700;
+    padding: 1px 4px;
+    background: var(--ink);
+    color: var(--white);
+    flex-shrink: 0;
+  }
+  .file-chip .name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .job-settings {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    font-size: 0.75rem;
+    color: var(--mid);
+    font-family: 'Space Mono', monospace;
+  }
+  .setting-pill {
+    background: var(--paper);
+    border: 1px solid var(--border);
+    padding: 0.2rem 0.5rem;
+    font-size: 0.65rem;
+  }
+
+  .job-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+  .job-btn {
+    flex: 1;
+    min-width: 100px;
+    padding: 0.6rem 0.75rem;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.7rem;
+    font-weight: 700;
+    border: 2px solid var(--border-dark);
+    cursor: pointer;
+    transition: all 0.15s;
+    letter-spacing: 0.03em;
+  }
+  .job-btn.print-btn {
+    background: var(--ink);
+    color: var(--white);
+  }
+  .job-btn.print-btn:hover { background: var(--green); border-color: var(--green); }
+  .job-btn.dismiss-btn {
+    background: var(--white);
+    color: var(--mid);
+  }
+  .job-btn.dismiss-btn:hover {
+    background: var(--red-light);
+    color: var(--red);
+    border-color: var(--red);
+  }
+  .job-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* ── Preview Modal ── */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    z-index: 200;
+    align-items: center;
+    justify-content: center;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: var(--white);
+    border: 2px solid var(--border-dark);
+    box-shadow: 8px 8px 0 var(--border-dark);
+    width: 90%;
+    max-width: 900px;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+  }
+  .modal-header {
+    padding: 1rem 1.25rem;
+    border-bottom: 2px solid var(--border-dark);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--ink);
+    color: var(--white);
+  }
+  .modal-title {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.85rem;
+    font-weight: 700;
+  }
+  .modal-close {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 1.4rem;
+    cursor: pointer;
+    line-height: 1;
+    padding: 0.2rem;
+  }
+  .modal-body {
+    flex: 1;
+    overflow: auto;
+    padding: 1.25rem;
+    background: var(--paper);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .modal-body iframe,
+  .modal-body img {
+    max-width: 100%;
+    max-height: 70vh;
+    border: 1px solid var(--border);
+    box-shadow: 2px 2px 8px rgba(0,0,0,0.2);
+  }
+  .modal-body iframe { width: 100%; height: 70vh; }
+
+  /* ── Toast ── */
+  #toast {
+    position: fixed;
+    bottom: 2rem;
+    right: 2rem;
+    background: var(--ink);
+    color: var(--white);
+    font-family: 'Space Mono', monospace;
+    font-size: 0.75rem;
+    padding: 0.75rem 1.25rem;
+    border: 2px solid var(--accent);
+    z-index: 300;
+    transform: translateY(100px);
+    opacity: 0;
+    transition: all 0.25s;
+  }
+  #toast.show { transform: translateY(0); opacity: 1; }
+
+  /* ── Copies editor ── */
+  .copies-input {
+    width: 60px;
+    border: 1px solid var(--border);
+    padding: 0.2rem 0.4rem;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.8rem;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">PRINT<span>STATION</span> // Dashboard</div>
+  <div class="header-meta">
+    <span><span class="status-dot" id="socketDot"></span><span id="socketStatus">Connecting…</span></span>
+    <span id="sessionLabel" style="color:rgba(255,255,255,0.7)">No session</span>
+  </div>
+</header>
+
+<div class="layout">
+  <!-- Left Panel -->
+  <aside class="left-panel">
+    <div>
+      <div class="panel-label">Station Label</div>
+      <input class="label-input" id="labelInput" type="text" placeholder="e.g. Library Printer 1" value="Printer Station">
+    </div>
+
+    <button class="btn" id="createSessionBtn">Generate QR Session</button>
+
+    <div>
+      <div class="panel-label">QR Code</div>
+      <div class="qr-wrapper">
+        <div class="qr-placeholder" id="qrPlaceholder">
+          Click "Generate QR Session" to start
+        </div>
+        <img id="qrImg" style="display:none" alt="QR Code">
+        <div class="session-url" id="sessionUrl" style="display:none" title="Click to copy"></div>
+      </div>
+    </div>
+
+    <div>
+      <div class="panel-label">Queue Stats</div>
+      <div class="stats-grid">
+        <div class="stat-box">
+          <div class="stat-val" id="statPending">0</div>
+          <div class="stat-key">Pending</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-val" id="statPrinted">0</div>
+          <div class="stat-key">Printed today</div>
+        </div>
+      </div>
+    </div>
+
+    <button class="btn secondary" id="clearPrintedBtn">Clear Printed Jobs</button>
+  </aside>
+
+  <!-- Right Panel -->
+  <main class="right-panel">
+    <div class="queue-header">
+      <div class="queue-title">Print Queue</div>
+      <div class="queue-count" id="queueCount">0</div>
+    </div>
+
+    <div id="jobList">
+      <div class="empty-state">
+        <div class="empty-icon">🖨</div>
+        <div class="empty-text">Waiting for print jobs…<br>Generate a session and share the QR.</div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- Preview Modal -->
+<div class="modal-overlay" id="previewModal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="previewTitle">File Preview</span>
+      <button class="modal-close" id="closeModal">✕</button>
+    </div>
+    <div class="modal-body" id="previewBody"></div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+  // ── State ──────────────────────────────────────────────────────────────────
+  let sessionId = localStorage.getItem('ps_session_id') || null;
+  let jobs = {};  // jobId → job data
+  let pendingCount = 0;
+  let printedCount = 0;
+
+  // ── Socket ─────────────────────────────────────────────────────────────────
+  const socket = io();
+
+  socket.on('connect', () => {
+    setSocketStatus(true);
+    if (sessionId) rejoinSession();
+  });
+  socket.on('disconnect', () => setSocketStatus(false));
+
+  socket.on('session_joined', ({ sessionId: sid }) => {
+    console.log('Joined session room:', sid);
+  });
+
+  socket.on('new_job', (job) => {
+    jobs[job.jobId] = { ...job, status: 'pending' };
+    renderJobCard(job.jobId, jobs[job.jobId]);
+    updateStats();
+    toast(`📥 New job from ${job.studentName} (${job.fileCount} file${job.fileCount > 1 ? 's' : ''})`);
+    socket.emit('ack_job', { jobId: job.jobId, sessionId });
+  });
+
+  socket.on('job_status_update', ({ jobId, status }) => {
+    if (jobs[jobId]) {
+      jobs[jobId].status = status;
+      updateJobCardStatus(jobId, status);
+      updateStats();
+    }
+  });
+
+  // Heartbeat
+  setInterval(() => {
+    if (sessionId) socket.emit('heartbeat', { sessionId });
+  }, 30000);
+
+  // ── Session Management ─────────────────────────────────────────────────────
+  document.getElementById('createSessionBtn').addEventListener('click', createSession);
+
+  async function createSession() {
+    const label = document.getElementById('labelInput').value.trim() || 'Printer Station';
+    const btn = document.getElementById('createSessionBtn');
+    btn.disabled = true;
+    btn.textContent = 'Creating…';
+
+    try {
+      const res = await fetch('/api/sessions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ label })
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error);
+
+      sessionId = data.sessionId;
+      localStorage.setItem('ps_session_id', sessionId);
+
+      // Show QR
+      document.getElementById('qrPlaceholder').style.display = 'none';
+      const qrImg = document.getElementById('qrImg');
+      qrImg.src = data.qrCodeDataUrl;
+      qrImg.style.display = 'block';
+
+      const urlEl = document.getElementById('sessionUrl');
+      urlEl.textContent = data.sessionUrl;
+      urlEl.style.display = 'block';
+      urlEl.onclick = () => { navigator.clipboard.writeText(data.sessionUrl); toast('URL copied!'); };
+
+      document.getElementById('sessionLabel').textContent = label;
+
+      // Join socket room
+      socket.emit('join_session', { sessionId });
+
+      // Load any existing jobs
+      loadExistingJobs();
+
+      toast('✅ Session created. Share the QR code!');
+    } catch (err) {
+      toast('❌ ' + err.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Regenerate QR Session';
+    }
+  }
+
+  async function rejoinSession() {
+    try {
+      const res = await fetch(`/api/sessions/${sessionId}`);
+      const data = await res.json();
+      if (!data.success || data.session.status !== 'active') {
+        sessionId = null;
+        localStorage.removeItem('ps_session_id');
+        return;
+      }
+      // Restore UI
+      const session = data.session;
+      document.getElementById('qrPlaceholder').style.display = 'none';
+      const qrImg = document.getElementById('qrImg');
+      qrImg.src = session.qrCodeDataUrl;
+      qrImg.style.display = 'block';
+      const urlEl = document.getElementById('sessionUrl');
+      urlEl.textContent = session.sessionUrl;
+      urlEl.style.display = 'block';
+      urlEl.onclick = () => { navigator.clipboard.writeText(session.sessionUrl); toast('URL copied!'); };
+      document.getElementById('sessionLabel').textContent = session.label;
+      document.getElementById('labelInput').value = session.label;
+      document.getElementById('createSessionBtn').textContent = 'Regenerate QR Session';
+
+      socket.emit('join_session', { sessionId });
+      loadExistingJobs();
+    } catch (_) {}
+  }
+
+  async function loadExistingJobs() {
+    if (!sessionId) return;
+    try {
+      const res = await fetch(`/api/jobs/${sessionId}`);
+      const data = await res.json();
+      if (!data.success) return;
+      jobs = {};
+      document.getElementById('jobList').innerHTML = '';
+      for (const job of data.jobs) {
+        jobs[job.jobId] = job;
+        renderJobCard(job.jobId, job);
+      }
+      updateStats();
+    } catch (_) {}
+  }
+
+  // ── Render Job Card ────────────────────────────────────────────────────────
+  function renderJobCard(jobId, job) {
+    const existing = document.getElementById(`job-${jobId}`);
+    if (existing) existing.remove();
+
+    // Remove empty state
+    const empty = document.querySelector('.empty-state');
+    if (empty) empty.remove();
+
+    const card = document.createElement('div');
+    card.className = `job-card status-${job.status}`;
+    card.id = `job-${jobId}`;
+
+    const time = new Date(job.submittedAt);
+    const timeStr = time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    const filesHtml = (job.files || []).map(f => {
+      const ext = f.originalName.split('.').pop().toUpperCase();
+      const shortName = f.originalName.length > 22
+        ? f.originalName.substring(0, 20) + '…'
+        : f.originalName;
+      return `<div class="file-chip" onclick="previewFile('${jobId}','${f.storedName}','${f.mimeType}','${f.originalName}')">
+        <span class="ext">${ext}</span>
+        <span class="name">${shortName}</span>
+      </div>`;
+    }).join('');
+
+    const s = job.settings || {};
+    const settingsHtml = `
+      <span class="setting-pill">${s.copies || 1} cop${(s.copies||1)>1?'ies':'y'}</span>
+      <span class="setting-pill">${s.orientation || 'portrait'}</span>
+      <span class="setting-pill">${s.colorMode || 'grayscale'}</span>
+      <span class="setting-pill">${s.paperSize || 'A4'}</span>
+    `;
+
+    const isPrinted = job.status === 'printed';
+
+    card.innerHTML = `
+      <div class="job-header">
+        <div>
+          <div class="job-student">${escHtml(job.studentName || 'Anonymous')}</div>
+          <div style="margin-top:4px"><span class="badge badge-${job.status}" id="badge-${jobId}">${job.status}</span></div>
+        </div>
+        <div class="job-time">${timeStr}</div>
+      </div>
+      <div class="job-files">${filesHtml}</div>
+      <div class="job-settings">
+        ${settingsHtml}
+        <span class="setting-pill">${(job.files||[]).length} file${(job.files||[]).length !== 1?'s':''}</span>
+        Copies: <input class="copies-input" type="number" min="1" max="20" value="${s.copies||1}" id="copies-${jobId}" ${isPrinted?'disabled':''}>
+      </div>
+      <div class="job-actions">
+        <button class="job-btn print-btn" id="print-btn-${jobId}" onclick="printJob('${jobId}')" ${isPrinted?'disabled':''}>
+          ${isPrinted ? '✓ Printed' : '🖨 Print'}
+        </button>
+        <button class="job-btn dismiss-btn" onclick="dismissJob('${jobId}')">✕ Dismiss</button>
+      </div>
+    `;
+
+    document.getElementById('jobList').prepend(card);
+  }
+
+  function updateJobCardStatus(jobId, status) {
+    const card = document.getElementById(`job-${jobId}`);
+    if (!card) return;
+    card.className = `job-card status-${status}`;
+    const badge = document.getElementById(`badge-${jobId}`);
+    if (badge) {
+      badge.className = `badge badge-${status}`;
+      badge.textContent = status;
+    }
+    const printBtn = document.getElementById(`print-btn-${jobId}`);
+    if (printBtn && status === 'printed') {
+      printBtn.disabled = true;
+      printBtn.textContent = '✓ Printed';
+    }
+  }
+
+  // ── Print Action ───────────────────────────────────────────────────────────
+  async function printJob(jobId) {
+    const job = jobs[jobId];
+    if (!job) return;
+
+    const copiesEl = document.getElementById(`copies-${jobId}`);
+    const copies = parseInt(copiesEl?.value) || job.settings?.copies || 1;
+    const printBtn = document.getElementById(`print-btn-${jobId}`);
+    printBtn.disabled = true;
+    printBtn.textContent = 'Printing…';
+
+    await updateJobStatus(jobId, 'printing');
+
+    for (const f of job.files) {
+      const fileUrl = `/api/files/${sessionId}/${f.storedName}`;
+      await openPrintWindow(fileUrl, f.storedName, f.originalName, copies, job.settings);
+      if (job.files.length > 1) await delay(600);
+    }
+
+    await updateJobStatus(jobId, 'printed');
+    jobs[jobId].status = 'printed';
+    updateJobCardStatus(jobId, 'printed');
+    updateStats();
+  }
+
+  function openPrintWindow(fileUrl, storedName, originalName, copies, settings) {
+    return new Promise((resolve) => {
+      const ext    = storedName.split('.').pop().toLowerCase();
+      const orient = settings?.orientation || 'portrait';
+      const paper  = settings?.paperSize   || 'A4';
+      const gray   = settings?.colorMode   === 'grayscale';
+      const abs    = window.location.origin + fileUrl; // absolute URL so new window can load it
+
+      if (ext === 'pdf') {
+        // ── PDF ──────────────────────────────────────────────────────────────
+        // Open a plain page that embeds the PDF in an <embed> tag filling
+        // the whole window, then immediately calls window.print().
+        // The browser PDF viewer takes over and shows the full system print
+        // dialog (printer list, paper, duplex, etc.).
+        const html = `<!DOCTYPE html><html><head>
+<title>${originalName}</title>
+<style>
+  * { margin:0; padding:0; }
+  html,body { width:100%; height:100%; overflow:hidden; background:#525659; }
+  embed { width:100%; height:100%; display:block; }
+</style>
+</head><body>
+<embed src="${abs}" type="application/pdf" width="100%" height="100%">
+<script>
+  // Wait for embed to load, then print
+  var attempts = 0;
+  function tryPrint() {
+    attempts++;
+    try {
+      window.focus();
+      window.print();
+    } catch(e) {}
+    if (attempts < ${copies}) {
+      setTimeout(tryPrint, 800);
+    }
+  }
+  // Give the PDF embed time to render
+  setTimeout(tryPrint, 1200);
+<\/script>
+</body></html>`;
+
+        const w = window.open('', '_blank', 'width=900,height=700,menubar=yes,toolbar=yes');
+        if (!w) { alert('Please allow popups for this site to enable printing.'); resolve(); return; }
+        w.document.open();
+        w.document.write(html);
+        w.document.close();
+        setTimeout(resolve, 2000);
+
+      } else {
+        // ── Image (JPG / PNG) ─────────────────────────────────────────────
+        // Open a window, load the image, apply @page + grayscale, then print.
+        const grayCSS = gray ? 'filter:grayscale(100%);' : '';
+        const html = `<!DOCTYPE html><html><head>
+<title>${originalName}</title>
+<style>
+  @page { size:${paper} ${orient}; margin:8mm; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:100%; height:100%; background:#fff;
+    display:flex; align-items:center; justify-content:center; }
+  img { max-width:100%; max-height:100vh; object-fit:contain; ${grayCSS} }
+</style>
+</head><body>
+<img id="img" src="${abs}">
+<script>
+  var printed = 0;
+  document.getElementById('img').onload = function() {
+    function doPrint() {
+      window.focus();
+      window.print();
+      printed++;
+      if (printed < ${copies}) setTimeout(doPrint, 900);
+    }
+    setTimeout(doPrint, 300);
+  };
+  document.getElementById('img').onerror = function() {
+    window.focus(); window.print();
+  };
+<\/script>
+</body></html>`;
+
+        const w = window.open('', '_blank', 'width=900,height=700,menubar=yes,toolbar=yes');
+        if (!w) { alert('Please allow popups for this site to enable printing.'); resolve(); return; }
+        w.document.open();
+        w.document.write(html);
+        w.document.close();
+        setTimeout(resolve, 2000);
+      }
+    });
+  }
+
+  async function updateJobStatus(jobId, status) {
+    try {
+      await fetch(`/api/jobs/${jobId}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status })
+      });
+    } catch (_) {}
+  }
+
+  async function dismissJob(jobId) {
+    if (!confirm('Remove this job from the queue?')) return;
+    try {
+      await fetch(`/api/jobs/${jobId}`, { method: 'DELETE' });
+      document.getElementById(`job-${jobId}`)?.remove();
+      delete jobs[jobId];
+      updateStats();
+      if (Object.keys(jobs).length === 0) showEmptyState();
+    } catch (err) {
+      toast('Failed to dismiss job');
+    }
+  }
+
+  // ── File Preview ───────────────────────────────────────────────────────────
+  function previewFile(jobId, storedName, mimeType, originalName) {
+    const url = `/api/files/${sessionId}/${storedName}`;
+    document.getElementById('previewTitle').textContent = originalName;
+    const body = document.getElementById('previewBody');
+    body.innerHTML = '';
+
+    if (mimeType.startsWith('image/')) {
+      const img = document.createElement('img');
+      img.src = url;
+      img.alt = originalName;
+      body.appendChild(img);
+    } else if (mimeType === 'application/pdf') {
+      const iframe = document.createElement('iframe');
+      iframe.src = url;
+      iframe.title = originalName;
+      body.appendChild(iframe);
+    }
+
+    document.getElementById('previewModal').classList.add('open');
+  }
+
+  document.getElementById('closeModal').addEventListener('click', () => {
+    document.getElementById('previewModal').classList.remove('open');
+    document.getElementById('previewBody').innerHTML = '';
+  });
+  document.getElementById('previewModal').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) {
+      e.currentTarget.classList.remove('open');
+      document.getElementById('previewBody').innerHTML = '';
+    }
+  });
+
+  // ── Stats ──────────────────────────────────────────────────────────────────
+  function updateStats() {
+    const allJobs = Object.values(jobs);
+    pendingCount = allJobs.filter(j => j.status === 'pending' || j.status === 'printing').length;
+    printedCount = allJobs.filter(j => j.status === 'printed').length;
+    document.getElementById('statPending').textContent = pendingCount;
+    document.getElementById('statPrinted').textContent = printedCount;
+    document.getElementById('queueCount').textContent = pendingCount;
+  }
+
+  document.getElementById('clearPrintedBtn').addEventListener('click', () => {
+    document.querySelectorAll('.job-card.status-printed').forEach(c => c.remove());
+    Object.keys(jobs).forEach(id => { if (jobs[id].status === 'printed') delete jobs[id]; });
+    updateStats();
+    if (Object.keys(jobs).length === 0) showEmptyState();
+  });
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
+  function setSocketStatus(connected) {
+    const dot = document.getElementById('socketDot');
+    const txt = document.getElementById('socketStatus');
+    dot.className = 'status-dot' + (connected ? ' live' : '');
+    txt.textContent = connected ? 'Live' : 'Offline';
+  }
+
+  function showEmptyState() {
+    const list = document.getElementById('jobList');
+    if (!list.querySelector('.empty-state')) {
+      list.innerHTML = `<div class="empty-state">
+        <div class="empty-icon">🖨</div>
+        <div class="empty-text">Queue is empty.<br>Waiting for new print jobs…</div>
+      </div>`;
+    }
+  }
+
+  function toast(msg) {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    setTimeout(() => el.classList.remove('show'), 3500);
+  }
+
+  function escHtml(str) {
+    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+  // ── Init ───────────────────────────────────────────────────────────────────
+  if (sessionId) {
+    // Will rejoin after socket connects
+  }
+</script>
+</body>
+</html>
