@@ -36,7 +36,6 @@
     min-height: 100vh;
   }
 
-  /* ── Header ── */
   header {
     background: var(--ink);
     color: var(--white);
@@ -75,15 +74,12 @@
   .status-dot.live { background: #4ade80; animation: pulse 2s infinite; }
   @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
 
-  /* ── Layout ── */
   .layout {
     display: grid;
     grid-template-columns: 320px 1fr;
-    gap: 0;
     min-height: calc(100vh - 56px);
   }
 
-  /* ── Left Panel: QR + Session ── */
   .left-panel {
     border-right: 2px solid var(--border-dark);
     padding: 2rem;
@@ -196,7 +192,6 @@
     margin-top: 2px;
   }
 
-  /* ── Right Panel: Job Queue ── */
   .right-panel {
     padding: 2rem;
     display: flex;
@@ -241,7 +236,6 @@
     font-size: 0.8rem;
   }
 
-  /* ── Job Card ── */
   .job-card {
     background: var(--white);
     border: 2px solid var(--border-dark);
@@ -252,7 +246,7 @@
   }
   @keyframes slideIn {
     from { transform: translateY(-12px); opacity: 0; }
-    to   { transform: translateY(0);    opacity: 1; }
+    to   { transform: translateY(0); opacity: 1; }
   }
   .job-card.status-printed {
     border-color: var(--green);
@@ -376,7 +370,6 @@
   }
   .job-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
-  /* ── Preview Modal ── */
   .modal-overlay {
     display: none;
     position: fixed;
@@ -438,7 +431,6 @@
   }
   .modal-body iframe { width: 100%; height: 70vh; }
 
-  /* ── Toast ── */
   #toast {
     position: fixed;
     bottom: 2rem;
@@ -456,7 +448,6 @@
   }
   #toast.show { transform: translateY(0); opacity: 1; }
 
-  /* ── Copies editor ── */
   .copies-input {
     width: 60px;
     border: 1px solid var(--border);
@@ -478,7 +469,6 @@
 </header>
 
 <div class="layout">
-  <!-- Left Panel -->
   <aside class="left-panel">
     <div>
       <div class="panel-label">Station Label</div>
@@ -515,7 +505,6 @@
     <button class="btn secondary" id="clearPrintedBtn">Clear Printed Jobs</button>
   </aside>
 
-  <!-- Right Panel -->
   <main class="right-panel">
     <div class="queue-header">
       <div class="queue-title">Print Queue</div>
@@ -531,7 +520,6 @@
   </main>
 </div>
 
-<!-- Preview Modal -->
 <div class="modal-overlay" id="previewModal">
   <div class="modal">
     <div class="modal-header">
@@ -542,24 +530,22 @@
   </div>
 </div>
 
-<!-- Toast -->
 <div id="toast"></div>
 
 <script src="/socket.io/socket.io.js"></script>
 <script>
-  // ── State ──────────────────────────────────────────────────────────────────
   let sessionId = localStorage.getItem('ps_session_id') || null;
-  let jobs = {};  // jobId → job data
+  let jobs = {};
   let pendingCount = 0;
   let printedCount = 0;
 
-  // ── Socket ─────────────────────────────────────────────────────────────────
   const socket = io();
 
   socket.on('connect', () => {
     setSocketStatus(true);
     if (sessionId) rejoinSession();
   });
+
   socket.on('disconnect', () => setSocketStatus(false));
 
   socket.on('session_joined', ({ sessionId: sid }) => {
@@ -582,12 +568,10 @@
     }
   });
 
-  // Heartbeat
   setInterval(() => {
     if (sessionId) socket.emit('heartbeat', { sessionId });
   }, 30000);
 
-  // ── Session Management ─────────────────────────────────────────────────────
   document.getElementById('createSessionBtn').addEventListener('click', createSession);
 
   async function createSession() {
@@ -602,13 +586,13 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ label })
       });
+
       const data = await res.json();
       if (!data.success) throw new Error(data.error);
 
       sessionId = data.sessionId;
       localStorage.setItem('ps_session_id', sessionId);
 
-      // Show QR
       document.getElementById('qrPlaceholder').style.display = 'none';
       const qrImg = document.getElementById('qrImg');
       qrImg.src = data.qrCodeDataUrl;
@@ -617,14 +601,14 @@
       const urlEl = document.getElementById('sessionUrl');
       urlEl.textContent = data.sessionUrl;
       urlEl.style.display = 'block';
-      urlEl.onclick = () => { navigator.clipboard.writeText(data.sessionUrl); toast('URL copied!'); };
+      urlEl.onclick = () => {
+        navigator.clipboard.writeText(data.sessionUrl);
+        toast('URL copied!');
+      };
 
       document.getElementById('sessionLabel').textContent = label;
 
-      // Join socket room
       socket.emit('join_session', { sessionId });
-
-      // Load any existing jobs
       loadExistingJobs();
 
       toast('✅ Session created. Share the QR code!');
@@ -640,21 +624,28 @@
     try {
       const res = await fetch(`/api/sessions/${sessionId}`);
       const data = await res.json();
+
       if (!data.success || data.session.status !== 'active') {
         sessionId = null;
         localStorage.removeItem('ps_session_id');
         return;
       }
-      // Restore UI
+
       const session = data.session;
       document.getElementById('qrPlaceholder').style.display = 'none';
+
       const qrImg = document.getElementById('qrImg');
       qrImg.src = session.qrCodeDataUrl;
       qrImg.style.display = 'block';
+
       const urlEl = document.getElementById('sessionUrl');
       urlEl.textContent = session.sessionUrl;
       urlEl.style.display = 'block';
-      urlEl.onclick = () => { navigator.clipboard.writeText(session.sessionUrl); toast('URL copied!'); };
+      urlEl.onclick = () => {
+        navigator.clipboard.writeText(session.sessionUrl);
+        toast('URL copied!');
+      };
+
       document.getElementById('sessionLabel').textContent = session.label;
       document.getElementById('labelInput').value = session.label;
       document.getElementById('createSessionBtn').textContent = 'Regenerate QR Session';
@@ -666,26 +657,28 @@
 
   async function loadExistingJobs() {
     if (!sessionId) return;
+
     try {
       const res = await fetch(`/api/jobs/${sessionId}`);
       const data = await res.json();
       if (!data.success) return;
+
       jobs = {};
       document.getElementById('jobList').innerHTML = '';
+
       for (const job of data.jobs) {
         jobs[job.jobId] = job;
         renderJobCard(job.jobId, job);
       }
+
       updateStats();
     } catch (_) {}
   }
 
-  // ── Render Job Card ────────────────────────────────────────────────────────
   function renderJobCard(jobId, job) {
     const existing = document.getElementById(`job-${jobId}`);
     if (existing) existing.remove();
 
-    // Remove empty state
     const empty = document.querySelector('.empty-state');
     if (empty) empty.remove();
 
@@ -701,15 +694,17 @@
       const shortName = f.originalName.length > 22
         ? f.originalName.substring(0, 20) + '…'
         : f.originalName;
-      return `<div class="file-chip" onclick="previewFile('${jobId}','${f.storedName}','${f.mimeType}','${f.originalName}')">
+
+      return `<div class="file-chip"
+        onclick="previewFile('${encodeURIComponent(f.url || '')}','${f.mimeType}','${escHtmlAttr(f.originalName)}')">
         <span class="ext">${ext}</span>
-        <span class="name">${shortName}</span>
+        <span class="name">${escHtml(shortName)}</span>
       </div>`;
     }).join('');
 
     const s = job.settings || {};
     const settingsHtml = `
-      <span class="setting-pill">${s.copies || 1} cop${(s.copies||1)>1?'ies':'y'}</span>
+      <span class="setting-pill">${s.copies || 1} cop${(s.copies || 1) > 1 ? 'ies' : 'y'}</span>
       <span class="setting-pill">${s.orientation || 'portrait'}</span>
       <span class="setting-pill">${s.colorMode || 'grayscale'}</span>
       <span class="setting-pill">${s.paperSize || 'A4'}</span>
@@ -728,11 +723,11 @@
       <div class="job-files">${filesHtml}</div>
       <div class="job-settings">
         ${settingsHtml}
-        <span class="setting-pill">${(job.files||[]).length} file${(job.files||[]).length !== 1?'s':''}</span>
-        Copies: <input class="copies-input" type="number" min="1" max="20" value="${s.copies||1}" id="copies-${jobId}" ${isPrinted?'disabled':''}>
+        <span class="setting-pill">${(job.files || []).length} file${(job.files || []).length !== 1 ? 's' : ''}</span>
+        Copies: <input class="copies-input" type="number" min="1" max="20" value="${s.copies || 1}" id="copies-${jobId}" ${isPrinted ? 'disabled' : ''}>
       </div>
       <div class="job-actions">
-        <button class="job-btn print-btn" id="print-btn-${jobId}" onclick="printJob('${jobId}')" ${isPrinted?'disabled':''}>
+        <button class="job-btn print-btn" id="print-btn-${jobId}" onclick="printJob('${jobId}')" ${isPrinted ? 'disabled' : ''}>
           ${isPrinted ? '✓ Printed' : '🖨 Print'}
         </button>
         <button class="job-btn dismiss-btn" onclick="dismissJob('${jobId}')">✕ Dismiss</button>
@@ -745,12 +740,15 @@
   function updateJobCardStatus(jobId, status) {
     const card = document.getElementById(`job-${jobId}`);
     if (!card) return;
+
     card.className = `job-card status-${status}`;
+
     const badge = document.getElementById(`badge-${jobId}`);
     if (badge) {
       badge.className = `badge badge-${status}`;
       badge.textContent = status;
     }
+
     const printBtn = document.getElementById(`print-btn-${jobId}`);
     if (printBtn && status === 'printed') {
       printBtn.disabled = true;
@@ -758,117 +756,147 @@
     }
   }
 
-  // ── Print Action ───────────────────────────────────────────────────────────
   async function printJob(jobId) {
     const job = jobs[jobId];
     if (!job) return;
 
     const copiesEl = document.getElementById(`copies-${jobId}`);
-    const copies = parseInt(copiesEl?.value) || job.settings?.copies || 1;
+    const copies = parseInt(copiesEl?.value, 10) || job.settings?.copies || 1;
+
     const printBtn = document.getElementById(`print-btn-${jobId}`);
     printBtn.disabled = true;
     printBtn.textContent = 'Printing…';
 
     await updateJobStatus(jobId, 'printing');
 
-    for (const f of job.files) {
-      const fileUrl = `/api/files/${sessionId}/${f.storedName}`;
-      await openPrintWindow(fileUrl, f.storedName, f.originalName, copies, job.settings);
-      if (job.files.length > 1) await delay(600);
-    }
+    try {
+      for (const f of job.files) {
+        await openPrintWindow(f.url, f.storedName, f.originalName, copies, job.settings, f.mimeType);
+        if (job.files.length > 1) await delay(600);
+      }
 
-    await updateJobStatus(jobId, 'printed');
-    jobs[jobId].status = 'printed';
-    updateJobCardStatus(jobId, 'printed');
-    updateStats();
+      await updateJobStatus(jobId, 'printed');
+      jobs[jobId].status = 'printed';
+      updateJobCardStatus(jobId, 'printed');
+      updateStats();
+    } catch (err) {
+      toast('Print failed');
+      printBtn.disabled = false;
+      printBtn.textContent = '🖨 Print';
+      await updateJobStatus(jobId, 'failed');
+      jobs[jobId].status = 'failed';
+      updateJobCardStatus(jobId, 'failed');
+      updateStats();
+    }
   }
 
-  function openPrintWindow(fileUrl, storedName, originalName, copies, settings) {
-    return new Promise((resolve) => {
-      const ext    = storedName.split('.').pop().toLowerCase();
+  function openPrintWindow(fileUrl, storedName, originalName, copies, settings, mimeType) {
+    return new Promise((resolve, reject) => {
+      const ext = storedName.split('.').pop().toLowerCase();
+      const isPdf = mimeType === 'application/pdf' || ext === 'pdf';
       const orient = settings?.orientation || 'portrait';
-      const paper  = settings?.paperSize   || 'A4';
-      const gray   = settings?.colorMode   === 'grayscale';
-      const abs    = window.location.origin + fileUrl; // absolute URL so new window can load it
+      const paper = settings?.paperSize || 'A4';
+      const gray = settings?.colorMode === 'grayscale';
+      const abs = fileUrl;
 
-      if (ext === 'pdf') {
-        // ── PDF ──────────────────────────────────────────────────────────────
-        // Open a plain page that embeds the PDF in an <embed> tag filling
-        // the whole window, then immediately calls window.print().
-        // The browser PDF viewer takes over and shows the full system print
-        // dialog (printer list, paper, duplex, etc.).
+      if (!abs) {
+        reject(new Error('Missing file URL'));
+        return;
+      }
+
+      if (isPdf) {
         const html = `<!DOCTYPE html><html><head>
-<title>${originalName}</title>
+<title>${escapeHtmlForTemplate(originalName)}</title>
 <style>
   * { margin:0; padding:0; }
   html,body { width:100%; height:100%; overflow:hidden; background:#525659; }
   embed { width:100%; height:100%; display:block; }
 </style>
 </head><body>
-<embed src="${abs}" type="application/pdf" width="100%" height="100%">
+<embed id="pdfEmbed" src="${escapeHtmlForTemplate(abs)}" type="application/pdf" width="100%" height="100%">
 <script>
-  // Wait for embed to load, then print
-  var attempts = 0;
-  function tryPrint() {
-    attempts++;
+  let printed = 0;
+  function doPrint() {
     try {
       window.focus();
       window.print();
-    } catch(e) {}
-    if (attempts < ${copies}) {
-      setTimeout(tryPrint, 800);
-    }
+      printed++;
+      if (printed < ${copies}) {
+        setTimeout(doPrint, 1000);
+      }
+    } catch (e) {}
   }
-  // Give the PDF embed time to render
-  setTimeout(tryPrint, 1200);
+  setTimeout(doPrint, 2000);
 <\/script>
 </body></html>`;
 
         const w = window.open('', '_blank', 'width=900,height=700,menubar=yes,toolbar=yes');
-        if (!w) { alert('Please allow popups for this site to enable printing.'); resolve(); return; }
+        if (!w) {
+          alert('Please allow popups for this site to enable printing.');
+          reject(new Error('Popup blocked'));
+          return;
+        }
+
         w.document.open();
         w.document.write(html);
         w.document.close();
-        setTimeout(resolve, 2000);
-
+        setTimeout(resolve, 2600);
       } else {
-        // ── Image (JPG / PNG) ─────────────────────────────────────────────
-        // Open a window, load the image, apply @page + grayscale, then print.
         const grayCSS = gray ? 'filter:grayscale(100%);' : '';
         const html = `<!DOCTYPE html><html><head>
-<title>${originalName}</title>
+<title>${escapeHtmlForTemplate(originalName)}</title>
 <style>
   @page { size:${paper} ${orient}; margin:8mm; }
   * { margin:0; padding:0; box-sizing:border-box; }
-  html,body { width:100%; height:100%; background:#fff;
-    display:flex; align-items:center; justify-content:center; }
-  img { max-width:100%; max-height:100vh; object-fit:contain; ${grayCSS} }
+  html,body {
+    width:100%; height:100%;
+    background:#fff;
+    display:flex; align-items:center; justify-content:center;
+  }
+  img {
+    max-width:100%;
+    max-height:100vh;
+    object-fit:contain;
+    ${grayCSS}
+  }
 </style>
 </head><body>
-<img id="img" src="${abs}">
+<img id="img">
 <script>
-  var printed = 0;
-  document.getElementById('img').onload = function() {
+  const img = document.getElementById('img');
+  let printed = 0;
+
+  img.onload = function() {
     function doPrint() {
       window.focus();
       window.print();
       printed++;
-      if (printed < ${copies}) setTimeout(doPrint, 900);
+      if (printed < ${copies}) {
+        setTimeout(doPrint, 800);
+      }
     }
-    setTimeout(doPrint, 300);
+    setTimeout(doPrint, 500);
   };
-  document.getElementById('img').onerror = function() {
-    window.focus(); window.print();
+
+  img.onerror = function() {
+    document.body.innerHTML = "<div style='font-family:monospace;color:#b91c1c;padding:20px'>Failed to load image for printing</div>";
   };
+
+  img.src = "${escapeHtmlForTemplate(abs)}";
 <\/script>
 </body></html>`;
 
         const w = window.open('', '_blank', 'width=900,height=700,menubar=yes,toolbar=yes');
-        if (!w) { alert('Please allow popups for this site to enable printing.'); resolve(); return; }
+        if (!w) {
+          alert('Please allow popups for this site to enable printing.');
+          reject(new Error('Popup blocked'));
+          return;
+        }
+
         w.document.open();
         w.document.write(html);
         w.document.close();
-        setTimeout(resolve, 2000);
+        setTimeout(resolve, 2600);
       }
     });
   }
@@ -885,34 +913,49 @@
 
   async function dismissJob(jobId) {
     if (!confirm('Remove this job from the queue?')) return;
+
     try {
       await fetch(`/api/jobs/${jobId}`, { method: 'DELETE' });
       document.getElementById(`job-${jobId}`)?.remove();
       delete jobs[jobId];
       updateStats();
       if (Object.keys(jobs).length === 0) showEmptyState();
-    } catch (err) {
+    } catch (_) {
       toast('Failed to dismiss job');
     }
   }
 
-  // ── File Preview ───────────────────────────────────────────────────────────
-  function previewFile(jobId, storedName, mimeType, originalName) {
-    const url = `/api/files/${sessionId}/${storedName}`;
+  function previewFile(encodedUrl, mimeType, originalName) {
+    const url = decodeURIComponent(encodedUrl);
     document.getElementById('previewTitle').textContent = originalName;
+
     const body = document.getElementById('previewBody');
     body.innerHTML = '';
+
+    if (!url) {
+      body.innerHTML = '<div style="font-family:monospace;color:#b91c1c">Missing file URL</div>';
+      document.getElementById('previewModal').classList.add('open');
+      return;
+    }
 
     if (mimeType.startsWith('image/')) {
       const img = document.createElement('img');
       img.src = url;
       img.alt = originalName;
+      img.onerror = () => {
+        body.innerHTML = '<div style="font-family:monospace;color:#b91c1c">Image preview failed to load</div>';
+      };
       body.appendChild(img);
     } else if (mimeType === 'application/pdf') {
       const iframe = document.createElement('iframe');
       iframe.src = url;
       iframe.title = originalName;
+      iframe.onerror = () => {
+        body.innerHTML = '<div style="font-family:monospace;color:#b91c1c">PDF preview failed to load</div>';
+      };
       body.appendChild(iframe);
+    } else {
+      body.innerHTML = '<div style="font-family:monospace;color:#6b7280">Preview not supported</div>';
     }
 
     document.getElementById('previewModal').classList.add('open');
@@ -922,6 +965,7 @@
     document.getElementById('previewModal').classList.remove('open');
     document.getElementById('previewBody').innerHTML = '';
   });
+
   document.getElementById('previewModal').addEventListener('click', (e) => {
     if (e.target === e.currentTarget) {
       e.currentTarget.classList.remove('open');
@@ -929,7 +973,6 @@
     }
   });
 
-  // ── Stats ──────────────────────────────────────────────────────────────────
   function updateStats() {
     const allJobs = Object.values(jobs);
     pendingCount = allJobs.filter(j => j.status === 'pending' || j.status === 'printing').length;
@@ -941,12 +984,13 @@
 
   document.getElementById('clearPrintedBtn').addEventListener('click', () => {
     document.querySelectorAll('.job-card.status-printed').forEach(c => c.remove());
-    Object.keys(jobs).forEach(id => { if (jobs[id].status === 'printed') delete jobs[id]; });
+    Object.keys(jobs).forEach(id => {
+      if (jobs[id].status === 'printed') delete jobs[id];
+    });
     updateStats();
     if (Object.keys(jobs).length === 0) showEmptyState();
   });
 
-  // ── Helpers ────────────────────────────────────────────────────────────────
   function setSocketStatus(connected) {
     const dot = document.getElementById('socketDot');
     const txt = document.getElementById('socketStatus');
@@ -972,14 +1016,31 @@
   }
 
   function escHtml(str) {
-    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
   }
 
-  function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
+  function escHtmlAttr(str) {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/'/g, '&#39;')
+      .replace(/"/g, '&quot;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
 
-  // ── Init ───────────────────────────────────────────────────────────────────
-  if (sessionId) {
-    // Will rejoin after socket connects
+  function escapeHtmlForTemplate(str) {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/"/g, '&quot;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
+
+  function delay(ms) {
+    return new Promise(r => setTimeout(r, ms));
   }
 </script>
 </body>
