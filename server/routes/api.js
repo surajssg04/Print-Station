@@ -125,9 +125,10 @@ router.post('/jobs/:sessionId', upload.array('files', 10), async (req, res) => {
       fileCount: files.length,
       files: files.map(f => ({
         originalName: f.originalName,
+        storedName: f.storedName,
         mimeType: f.mimeType,
         fileSize: f.fileSize
-      })),
+        })),
       settings: job.settings,
       submittedAt: job.submittedAt
     });
@@ -168,19 +169,36 @@ router.get('/jobs/detail/:jobId', async (req, res) => {
 router.get('/files/:sessionId/:filename', async (req, res) => {
   try {
     const { sessionId, filename } = req.params;
-    // Security: only alphanumeric, dashes, and common extensions
+
     if (!/^[\w\-]+\.(pdf|jpg|jpeg|png)$/i.test(filename)) {
       return res.status(400).json({ error: 'Invalid filename' });
     }
 
-    const filePath = path.join(UPLOAD_DIR, sessionId, filename);
-    if (!await fs.pathExists(filePath)) {
-      return res.status(404).json({ error: 'File not found' });
+    const job = await PrintJob.findOne({
+      sessionId,
+      'files.storedName': filename
+    });
+
+    if (!job) {
+      return res.status(404).json({ error: 'File record not found in database' });
     }
 
-    res.sendFile(filePath);
+    const file = job.files.find(f => f.storedName === filename);
+
+    if (!file || !file.filePath) {
+      return res.status(404).json({ error: 'Stored file path missing' });
+    }
+
+    const exists = await fs.pathExists(file.filePath);
+    if (!exists) {
+      return res.status(404).json({ error: 'File not found on server' });
+    }
+
+    res.type(file.mimeType || 'application/octet-stream');
+    return res.sendFile(path.resolve(file.filePath));
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('Serve file error:', err);
+    return res.status(500).json({ error: err.message });
   }
 });
 
