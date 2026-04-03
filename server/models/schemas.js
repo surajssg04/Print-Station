@@ -51,15 +51,14 @@ const PrintJobSchema = new mongoose.Schema({
     type: String,
     default: 'Anonymous'
   },
-  files: [
-    {
-      originalName: { type: String, required: true },
-      storedName: { type: String, required: true },
-      url: { type: String, required: true },
-      publicId: { type: String, required: true },
-      mimeType: { type: String, required: true },
-      fileSize: { type: Number, required: true },
-      pageCount: { type: Number, default: 1 }
+    files: [{
+    originalName: String,
+    storedName: String,
+    url: String,        // ← REQUIRED
+    publicId: String,   // ← REQUIRED
+    mimeType: String,
+    fileSize: Number,
+    pageCount: { type: Number, default: 1 }
     }
   ],
   settings: {
